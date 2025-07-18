@@ -4,7 +4,6 @@ services:
     name: hris-postgresql
     env: postgresql
     plan: free
-    maxConnections: 10
 
   # Web Service
   - type: web
