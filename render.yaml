@@ -4,7 +4,6 @@ services:
     name: hris-postgresql
     env: postgresql
     plan: free
-    ipAllowList: []
 
   # Web Service
   - type: web
