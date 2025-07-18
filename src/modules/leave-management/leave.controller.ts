@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { AuthenticatedRequest } from '@/types';
-import { CustomError } from '@/shared/middleware/error-handler';
+import { AuthenticatedRequest } from '../../types';
+import { CustomError } from '../../shared/middleware/error-handler';
 
 const prisma = new PrismaClient();
 

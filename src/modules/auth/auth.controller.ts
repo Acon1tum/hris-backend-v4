@@ -2,9 +2,9 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
-import { CustomError } from '@/shared/middleware/error-handler';
-import { validateEmail, validatePassword } from '@/utils/validation';
-import { JWTPayload } from '@/types';
+import { CustomError } from '../../shared/middleware/error-handler';
+import { validateEmail, validatePassword } from '../../utils/validation';
+import { JWTPayload } from '../../types';
 
 const prisma = new PrismaClient();
 

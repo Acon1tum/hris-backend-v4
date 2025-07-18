@@ -1,9 +1,9 @@
 import { Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { AuthenticatedRequest } from '@/types';
-import { CustomError } from '@/shared/middleware/error-handler';
-import { parsePaginationQuery, createPaginationResponse } from '@/utils/pagination';
-import { validateRequiredFields } from '@/utils/validation';
+import { AuthenticatedRequest } from '../../types';
+import { CustomError } from '../../shared/middleware/error-handler';
+import { parsePaginationQuery, createPaginationResponse } from '../../utils/pagination';
+import { validateRequiredFields } from '../../utils/validation';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { AuditLogsController } from './audit-logs.controller';
-import { requireRole, authMiddleware } from '@/shared/middleware/auth-middleware';
+import { requireRole, authMiddleware } from '../../../shared/middleware/auth-middleware';
 
 const router = Router();
 

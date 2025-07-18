@@ -1,4 +1,4 @@
-import { PaginationQuery, PaginationParams } from '@/types';
+import { PaginationQuery, PaginationParams } from '../types';
 
 export const parsePaginationQuery = (query: PaginationQuery): PaginationParams => {
   const page = Math.max(1, parseInt(query.page || '1'));

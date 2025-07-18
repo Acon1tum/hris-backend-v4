@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { LeaveController } from './leave.controller';
-import { authMiddleware, requireRole } from '@/shared/middleware/auth-middleware';
+import { authMiddleware, requireRole } from '../../shared/middleware/auth-middleware';
 
 const router = Router();
 

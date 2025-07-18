@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { UsersController } from './users.controller';
-import { requireRole, authMiddleware } from '@/shared/middleware/auth-middleware';
+import { requireRole, authMiddleware } from '../../../shared/middleware/auth-middleware';
 
 const router = Router();
 

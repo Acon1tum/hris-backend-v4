@@ -1,8 +1,8 @@
 import { Request, Response } from 'express';
 import { PrismaClient, Status } from '@prisma/client';
 import bcrypt from 'bcryptjs';
-import { validatePassword } from '@/utils/validation';
-import { CustomError } from '@/shared/middleware/error-handler';
+import { validatePassword } from '../../../utils/validation';
+import { CustomError } from '../../../shared/middleware/error-handler';
 
 const prisma = new PrismaClient();
 
