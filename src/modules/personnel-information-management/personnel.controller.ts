@@ -199,6 +199,7 @@ export class PersonnelController {
           email,
           password_hash: passwordHash,
           status: 'Active',
+          role: 'Employee', // Default role for new personnel
           ...(profile_picture ? { profile_picture } : {})
         }
       });

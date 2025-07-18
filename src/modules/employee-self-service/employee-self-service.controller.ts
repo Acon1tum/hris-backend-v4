@@ -75,13 +75,13 @@ export const employeeSelfServiceController = {
       }
       console.log('Personnel raw from DB:', personnel); // Dump raw personnel object
       const userProfile = mapPersonnelToUserProfile(personnel);
-      res.json({
+      return res.json({
         success: true,
         data: userProfile,
         message: 'Profile fetched successfully',
       });
     } catch (error: any) {
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Failed to fetch profile',
         error: error.message,
@@ -156,9 +156,9 @@ export const employeeSelfServiceController = {
       if (email) {
         await prisma.user.update({ where: { id: userId }, data: { email } });
       }
-      res.json({ success: true, message: 'Profile updated successfully' });
+      return res.json({ success: true, message: 'Profile updated successfully' });
     } catch (error: any) {
-      res.status(500).json({ success: false, message: 'Failed to update profile', error: error.message });
+      return res.status(500).json({ success: false, message: 'Failed to update profile', error: error.message });
     }
   },
 
@@ -189,13 +189,13 @@ export const employeeSelfServiceController = {
         orderBy: { createdAt: 'desc' },
       });
 
-      res.json({
+      return res.json({
         success: true,
         data: documents,
         message: 'Documents fetched successfully',
       });
     } catch (error: any) {
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Failed to fetch documents',
         error: error.message,
@@ -263,13 +263,13 @@ export const employeeSelfServiceController = {
         },
       });
 
-      res.status(201).json({
+      return res.status(201).json({
         success: true,
         data: document,
         message: 'Document uploaded successfully',
       });
     } catch (error: any) {
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Failed to upload document',
         error: error.message,
@@ -326,12 +326,12 @@ export const employeeSelfServiceController = {
         where: { id },
       });
 
-      res.json({
+      return res.json({
         success: true,
         message: 'Document deleted successfully',
       });
     } catch (error: any) {
-      res.status(500).json({
+      return res.status(500).json({
         success: false,
         message: 'Failed to delete document',
         error: error.message,
