@@ -14,6 +14,9 @@ router.get('/profile/completion-status', authMiddleware, jobPortalController.che
 // Job Listings (public)
 router.get('/jobs', jobPortalController.listJobs.bind(jobPortalController));
 router.get('/jobs/:id', jobPortalController.getJob.bind(jobPortalController));
+router.post('/jobs', jobPortalController.createJobPosting.bind(jobPortalController));
+router.get('/salary-ranges', jobPortalController.getSalaryRanges.bind(jobPortalController));
+router.get('/departments', jobPortalController.getDepartments.bind(jobPortalController));
 
 // Job Application Process (require login)
 router.post('/applications', authMiddleware, jobPortalController.startApplication.bind(jobPortalController));

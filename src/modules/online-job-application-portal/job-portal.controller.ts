@@ -118,10 +118,37 @@ class JobPortalController {
   // Job Listings
   async listJobs(req: Request, res: Response) {
     try {
+      const { keywords, department, salary_range } = req.query;
+      
+      let whereClause: any = { posting_status: PostingStatus.Published };
+      
+      // Filter by keywords (search in position_title, job_description, qualifications)
+      if (keywords && typeof keywords === 'string' && keywords.trim()) {
+        whereClause.OR = [
+          { position_title: { contains: keywords.trim(), mode: 'insensitive' } },
+          { job_description: { contains: keywords.trim(), mode: 'insensitive' } },
+          { qualifications: { contains: keywords.trim(), mode: 'insensitive' } }
+        ];
+      }
+      
+      // Filter by department
+      if (department && typeof department === 'string' && department !== 'All') {
+        whereClause.department = {
+          department_name: { equals: department, mode: 'insensitive' }
+        };
+      }
+      
+      // Filter by salary range
+      if (salary_range && typeof salary_range === 'string' && salary_range.trim()) {
+        whereClause.salary_range = { equals: salary_range.trim() };
+      }
+
       const jobs = await prisma.jobPosting.findMany({
-        where: { posting_status: PostingStatus.Published },
+        where: whereClause,
+        include: { department: true },
         orderBy: { created_at: 'desc' }
       });
+      
       return res.json({ success: true, data: jobs });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: 'Failed to fetch jobs', error: error.message });
@@ -136,6 +163,49 @@ class JobPortalController {
       return res.json({ success: true, data: job });
     } catch (error: any) {
       return res.status(500).json({ success: false, message: 'Failed to fetch job', error: error.message });
+    }
+  }
+
+  async getSalaryRanges(req: Request, res: Response) {
+    try {
+      const salaryRanges = await prisma.jobPosting.findMany({
+        where: { 
+          posting_status: PostingStatus.Published,
+          salary_range: { not: null }
+        },
+        select: { salary_range: true },
+        distinct: ['salary_range']
+      });
+
+      const ranges = salaryRanges
+        .map(job => job.salary_range)
+        .filter(range => range && range.trim() !== '')
+        .sort();
+
+      return res.json({ success: true, data: ranges });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, message: 'Failed to fetch salary ranges', error: error.message });
+    }
+  }
+
+  async getDepartments(req: Request, res: Response) {
+    try {
+      const departments = await prisma.department.findMany({
+        where: {
+          job_postings: {
+            some: {
+              posting_status: PostingStatus.Published
+            }
+          }
+        },
+        select: { department_name: true },
+        orderBy: { department_name: 'asc' }
+      });
+
+      const departmentNames = departments.map(dept => dept.department_name);
+      return res.json({ success: true, data: departmentNames });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, message: 'Failed to fetch departments', error: error.message });
     }
   }
 
@@ -276,6 +346,15 @@ class JobPortalController {
       return res.json({ success: true, data: notification });
     } catch (error: any) {
       return res.status(400).json({ success: false, message: 'Notify failed', error: error.message });
+    }
+  }
+
+  async createJobPosting(req: Request, res: Response) {
+    try {
+      const job = await prisma.jobPosting.create({ data: req.body });
+      return res.json({ success: true, data: job });
+    } catch (error: any) {
+      return res.status(400).json({ success: false, message: 'Failed to create job posting', error: error.message });
     }
   }
 }
