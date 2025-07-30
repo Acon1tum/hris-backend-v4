@@ -34,11 +34,13 @@ enum CivilStatus {
 }
 
 enum EmploymentType {
-  Regular
-  Contractual
+  Full_Time
   Part_time
-  Temporary
   Consultant
+  Intern
+  Contractual
+  Probationary
+  OJT
 }
 
 enum AttendanceStatus {

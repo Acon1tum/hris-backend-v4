@@ -263,4 +263,18 @@ export class AuthController {
       message: 'Logout successful'
     });
   }
+
+  // Development endpoint to clear rate limiting (should be removed in production)
+  static async clearRateLimit(req: Request, res: Response) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new CustomError('This endpoint is not available in production', 403);
+    }
+
+    // Note: This is a placeholder. In a real implementation, you would need to
+    // clear the rate limiting store (Redis, memory, etc.)
+    res.json({
+      success: true,
+      message: 'Rate limit cleared (development only)'
+    });
+  }
 } 

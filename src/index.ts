@@ -37,10 +37,40 @@ const app = express();
 const prisma = new PrismaClient();
 
 // Rate limiting
-const limiter = rateLimit({
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+// Stricter rate limiting for authentication endpoints
+const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.'
+  max: isDevelopment ? 20 : 5, // More lenient in development
+  message: 'Too many login attempts from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true, // Don't count successful requests
+  keyGenerator: (req) => {
+    // Use IP + username for more specific rate limiting
+    return req.ip + ':' + (req.body?.username || 'unknown');
+  },
+  handler: (req, res) => {
+    res.status(429).json({
+      success: false,
+      message: 'Too many login attempts from this IP, please try again later.',
+      retryAfter: Math.ceil(15 * 60) // 15 minutes in seconds
+    });
+  }
+});
+
+// More lenient rate limiting for general API endpoints
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: isDevelopment ? 1000 : 300, // More lenient in development
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for health checks and static files
+    return req.path === '/health' || req.path.startsWith('/uploads/');
+  }
 });
 
 // Middleware
@@ -48,7 +78,6 @@ app.use(helmet());
 app.use(cors());
 app.use(compression());
 app.use(morgan('combined'));
-app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -62,8 +91,11 @@ app.get('/health', (req: Request, res: Response) => {
   });
 });
 
-// API Routes
-app.use('/api/auth', authRoutes);
+// Apply rate limiting to specific route groups
+app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api', apiLimiter); // Apply general rate limiting to all other API routes
+
+// API Routes (without global rate limiting since we apply it per route group)
 app.use('/api/personnel', authMiddleware, personnelRoutes);
 app.use('/api/timekeeping', authMiddleware, timekeepingRoutes);
 app.use('/api/leave', authMiddleware, leaveRoutes);

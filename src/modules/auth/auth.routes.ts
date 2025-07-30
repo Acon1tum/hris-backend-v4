@@ -13,4 +13,7 @@ router.post('/refresh-token', AuthController.refreshToken);
 router.post('/change-password', authMiddleware, AuthController.changePassword);
 router.post('/logout', authMiddleware, AuthController.logout);
 
+// Development routes (should be removed in production)
+router.post('/clear-rate-limit', AuthController.clearRateLimit);
+
 export { router as authRoutes }; 

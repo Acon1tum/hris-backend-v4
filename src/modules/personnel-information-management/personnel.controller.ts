@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 import { AuthenticatedRequest } from '../../types';
 import { CustomError } from '../../shared/middleware/error-handler';
 import { parsePaginationQuery, createPaginationResponse } from '../../utils/pagination';
-import { validateRequiredFields } from '../../utils/validation';
+import { validateRequiredFields, validatePassword } from '../../utils/validation';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -184,6 +184,12 @@ export class PersonnelController {
 
     if (existingUser) {
       throw new CustomError('Username or email already exists', 409);
+    }
+
+    // Validate password strength
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      throw new CustomError(`Password validation failed: ${passwordValidation.errors.join(', ')}`, 400);
     }
 
     // Hash password
