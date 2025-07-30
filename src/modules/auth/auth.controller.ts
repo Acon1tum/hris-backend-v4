@@ -52,7 +52,7 @@ export class AuthController {
             first_name,
             last_name,
             middle_name,
-            employment_type: 'Regular',
+            employment_type: 'Full_Time',
             salary: 0.0 // Default salary, can be updated later
           }
         }
