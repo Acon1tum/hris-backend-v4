@@ -4,10 +4,14 @@ import { authMiddleware } from '../../shared/middleware/auth-middleware';
 
 const router = Router();
 
+// Test endpoint (for debugging)
+router.get('/test-database', jobPortalController.testDatabase.bind(jobPortalController));
+
 // Applicant Authentication & Profile
 router.post('/register', jobPortalController.register.bind(jobPortalController));
 router.post('/login', jobPortalController.login.bind(jobPortalController));
 router.get('/profile', authMiddleware, jobPortalController.getProfile.bind(jobPortalController));
+router.get('/current-profile', authMiddleware, jobPortalController.getCurrentApplicantProfile.bind(jobPortalController));
 router.put('/profile', authMiddleware, jobPortalController.updateProfile.bind(jobPortalController));
 router.get('/profile/completion-status', authMiddleware, jobPortalController.checkProfileCompletion.bind(jobPortalController));
 

@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
-import { PrismaClient, ApplicationStatus, PostingStatus } from '@prisma/client';
+import { PrismaClient, ApplicationStatus, PostingStatus, Prisma } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { AuthenticatedRequest } from '../../types';
 
 const prisma = new PrismaClient();
 
@@ -9,43 +10,106 @@ class JobPortalController {
   // Applicant Registration
   async register(req: Request, res: Response) {
     try {
-      const { first_name, last_name, middle_name, email, phone, current_employer, highest_education, password } = req.body;
-      if (!email || !password) {
-        return res.status(400).json({ success: false, message: 'Email and password are required' });
+      const {
+        first_name, last_name, middle_name, email, phone, password,
+        current_employer, highest_education
+      } = req.body;
+  
+      if (!email || !password || !phone || !first_name || !last_name) {
+        return res.status(400).json({ success: false, message: 'Email, password, phone number, first name, and last name are required' });
       }
-      // Check if user already exists
-      const existingUser = await prisma.user.findUnique({ where: { email } });
+  
+      if (!/^\d{10,}$/.test(phone.replace(/\D/g, ''))) {
+        return res.status(400).json({ success: false, message: 'Please enter a valid phone number (at least 10 digits)' });
+      }
+  
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ success: false, message: 'Please enter a valid email address' });
+      }
+  
+      if (password.length < 8) {
+        return res.status(400).json({ success: false, message: 'Password must be at least 8 characters long' });
+      }
+  
+      const trimmedEmail = email.trim().toLowerCase();
+  
+      // Check for existing user
+      let existingUser = await prisma.user.findUnique({ where: { email: trimmedEmail } });
+      if (!existingUser) {
+        existingUser = await prisma.user.findUnique({ where: { username: trimmedEmail } });
+      }
       if (existingUser) {
         return res.status(400).json({ success: false, message: 'Email already registered' });
       }
-      // Hash password
+  
       const password_hash = await bcrypt.hash(password, 10);
-      // Create user with role 'Applicant'
-      const user = await prisma.user.create({
-        data: {
-          username: email,
-          email,
-          password_hash,
-          status: 'Active',
-          role: 'Applicant'
-        }
+  
+      // Use a transaction for atomicity
+      let user, applicant;
+      const result = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.create({
+          data: {
+            username: trimmedEmail,
+            email: trimmedEmail,
+            password_hash,
+            status: 'Active',
+            role: 'Applicant'
+          }
+        });
+        const applicant = await tx.jobApplicant.create({
+          data: {
+            user_id: user.id,
+            first_name,
+            last_name,
+            middle_name,
+            email: trimmedEmail,
+            phone,
+            current_employer: current_employer || undefined,
+            highest_education: highest_education || undefined
+          }
+        });
+        return { user, applicant };
       });
-      // Create JobApplicant linked to user
-      const applicant = await prisma.jobApplicant.create({
-        data: {
-          user_id: user.id,
-          first_name,
-          last_name,
-          middle_name,
-          email,
-          phone,
-          current_employer,
-          highest_education
-        }
-      });
+      user = result.user;
+      applicant = result.applicant;
+      
+      // Defensive check
+      if (!user || !applicant) {
+        console.error('Registration failed: user or applicant not created', { user, applicant });
+        return res.status(500).json({ success: false, message: 'Registration failed: could not create user or applicant.' });
+      }
+      
       return res.json({ success: true, data: applicant });
     } catch (error: any) {
+      console.error('Registration error:', error);
       return res.status(400).json({ success: false, message: 'Registration failed', error: error.message });
+    }
+  }
+
+  // Test endpoint to check database
+  async testDatabase(req: Request, res: Response) {
+    try {
+      console.log('Testing database connection...');
+      
+      // Check if we can connect to the database
+      const userCount = await prisma.user.count();
+      console.log('Total users in database:', userCount);
+      
+      // List all users
+      const allUsers = await prisma.user.findMany({
+        select: { id: true, email: true, username: true, role: true }
+      });
+      console.log('All users:', allUsers);
+      
+      return res.json({ 
+        success: true, 
+        userCount, 
+        users: allUsers 
+      });
+    } catch (error: any) {
+      console.error('Database test error:', error);
+      return res.status(500).json({ success: false, message: 'Database test failed', error: error.message });
     }
   }
 
@@ -53,27 +117,96 @@ class JobPortalController {
   async login(req: Request, res: Response) {
     try {
       const { email, password } = req.body;
+      
+      console.log('=== Login Request ===');
+      console.log('Email:', email);
+      console.log('Request body:', JSON.stringify(req.body, null, 2));
+  
       if (!email || !password) {
+        console.log('Missing email or password');
         return res.status(400).json({ success: false, message: 'Email and password are required' });
       }
-      const user = await prisma.user.findUnique({ where: { email } });
+  
+      // First, find the user by email (case-insensitive)
+      const user = await prisma.user.findFirst({
+        where: {
+          email: {
+            equals: email,
+            mode: 'insensitive'
+          }
+        }
+      });
+  
+      console.log('User found in database:', user ? {
+        id: user.id,
+        email: user.email,
+        role: user.role
+      } : 'No user found');
+  
       if (!user) {
+        console.log('No user found with email:', email);
         return res.status(404).json({ success: false, message: 'User not found' });
       }
+      
+      if (user.role !== 'Applicant') {
+        console.log(`User found but has role '${user.role}', expected 'Applicant'`);
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Access denied. This portal is for applicants only.' 
+        });
+      }
+  
+      // Verify password
       const valid = await bcrypt.compare(password, user.password_hash);
       if (!valid) {
+        console.log('Invalid password for user:', user.id);
         return res.status(401).json({ success: false, message: 'Invalid password' });
       }
-      // Find applicant profile
-      const applicant = await prisma.jobApplicant.findFirst({ where: { user_id: user.id } });
+  
+      // Get the applicant record for this user
+      const applicant = await prisma.jobApplicant.findFirst({
+        where: { user_id: user.id }
+      });
+      
+      console.log('Found applicant record:', applicant ? `ID: ${applicant.id}` : 'No applicant record');
+      
       if (!applicant) {
-        return res.status(404).json({ success: false, message: 'Applicant profile not found' });
+        console.log('No applicant record found for user:', user.id);
+        return res.status(404).json({ 
+          success: false, 
+          message: 'Applicant profile not found. Please complete your registration.' 
+        });
       }
-      // Generate JWT
-      const token = jwt.sign({ userId: user.id, role: 'applicant' }, process.env.JWT_SECRET || 'secret', { expiresIn: '1d' });
-      return res.json({ success: true, token, data: applicant });
+
+      const token = jwt.sign(
+        { userId: user.id, role: user.role },
+        process.env.JWT_SECRET || 'secret',
+        { expiresIn: '1d' }
+      );
+
+      console.log('Login successful for user:', user.id);
+  
+      return res.json({
+        success: true,
+        token,
+        data: {
+          user: {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            username: user.username,
+            status: user.status
+          },
+          applicant,
+        },
+      });
     } catch (error: any) {
-      return res.status(400).json({ success: false, message: 'Login failed', error: error.message });
+      console.error('Login error:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Login failed',
+        error: error.message,
+      });
     }
   }
 
@@ -86,6 +219,28 @@ class JobPortalController {
       return res.json({ success: true, data: applicant });
     } catch (error: any) {
       return res.status(400).json({ success: false, message: 'Get profile failed', error: error.message });
+    }
+  }
+
+  // Get current applicant profile based on authenticated user
+  async getCurrentApplicantProfile(req: AuthenticatedRequest, res: Response) {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ success: false, message: 'User not authenticated' });
+      }
+
+      const applicant = await prisma.jobApplicant.findFirst({
+        where: { user_id: userId }
+      });
+
+      if (!applicant) {
+        return res.status(404).json({ success: false, message: 'Applicant profile not found' });
+      }
+
+      return res.json({ success: true, data: applicant });
+    } catch (error: any) {
+      return res.status(500).json({ success: false, message: 'Get current applicant profile failed', error: error.message });
     }
   }
 
