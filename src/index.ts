@@ -21,6 +21,7 @@ import { reportRoutes } from './modules/report-generation/report.routes';
 import { systemRoutes } from './modules/system-administration/system.routes';
 import { employeeSelfServiceRoutes } from './modules/employee-self-service/employee-self-service.routes';
 import { healthWellnessRoutes } from './modules/health-wellness/health-wellness.routes';
+import { jobPortalManagementRoutes } from './modules/job-portal-management/job-portal-management.routes';
 
 // Import middleware
 import { errorHandler } from './shared/middleware/error-handler';
@@ -107,7 +108,7 @@ app.use('/api/reports', authMiddleware, reportRoutes);
 app.use('/api/system', authMiddleware, systemRoutes);
 app.use('/api/employee-self-service', authMiddleware, employeeSelfServiceRoutes);
 app.use('/api/health-wellness', authMiddleware, healthWellnessRoutes);
-
+app.use('/api/job-portal-management', authMiddleware, jobPortalManagementRoutes);
 // Serve static files from /uploads with CORS and cross-origin headers
 app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
   setHeaders: (res, filePath) => {
