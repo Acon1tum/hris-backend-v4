@@ -14,6 +14,13 @@ router.get('/stats',
   PersonnelController.getPersonnelStats
 );
 
+// Get comprehensive dashboard statistics
+router.get('/dashboard-stats', 
+  authMiddleware, 
+  requireRole(['Admin', 'HR']), 
+  PersonnelController.getDashboardStats
+);
+
 // Get personnel by ID
 router.get('/:id', 
   authMiddleware, 
