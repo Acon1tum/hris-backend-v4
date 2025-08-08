@@ -108,6 +108,18 @@ router.post('/balance/initialize',
   LeaveController.initializeLeaveBalance
 );
 
+// GET /api/leave/balance/bulk-initialize-preview - Preview bulk initialization
+router.get('/balance/bulk-initialize-preview', 
+  authMiddleware, requireRole(['Admin', 'HR']),
+  LeaveController.previewBulkInitializeLeaveBalances
+);
+
+// POST /api/leave/balance/bulk-initialize - Bulk initialize leave balances for all personnel
+router.post('/balance/bulk-initialize', 
+  authMiddleware, requireRole(['Admin', 'HR']),
+  LeaveController.bulkInitializeLeaveBalances
+);
+
 // ==================== LEAVE MONETIZATION ====================
 
 // GET /api/leave/monetization - Get leave monetization requests

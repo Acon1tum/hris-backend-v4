@@ -719,6 +719,291 @@ export class LeaveController {
     }
   }
 
+  // POST /api/leave/balance/bulk-initialize - Bulk initialize leave balances for all personnel without credits
+  static async bulkInitializeLeaveBalances(req: Request, res: Response) {
+    try {
+      const { year } = req.body;
+      const currentYear = year || new Date().getFullYear().toString();
+
+      console.log(`Starting bulk leave balance initialization for year: ${currentYear}`);
+
+      // Get all personnel
+      const allPersonnel = await prisma.personnel.findMany({
+        where: {
+          user: {
+            status: 'Active'
+          }
+        },
+        select: {
+          id: true,
+          first_name: true,
+          last_name: true,
+          department: {
+            select: {
+              department_name: true
+            }
+          }
+        },
+        orderBy: [
+          { last_name: 'asc' },
+          { first_name: 'asc' }
+        ]
+      });
+
+      // Get all leave types
+      const allLeaveTypes = await prisma.leaveType.findMany({
+        orderBy: { leave_type_name: 'asc' }
+      });
+
+      if (allPersonnel.length === 0) {
+        throw new CustomError('No active personnel found', 404);
+      }
+
+      if (allLeaveTypes.length === 0) {
+        throw new CustomError('No leave types found', 404);
+      }
+
+      console.log(`Found ${allPersonnel.length} personnel and ${allLeaveTypes.length} leave types`);
+
+      // Get existing leave balances for the year
+      const existingBalances = await prisma.leaveBalance.findMany({
+        where: { year: currentYear },
+        select: {
+          personnel_id: true,
+          leave_type_id: true
+        }
+      });
+
+      // Create a set of existing balance combinations for quick lookup
+      const existingBalanceSet = new Set(
+        existingBalances.map(balance => `${balance.personnel_id}-${balance.leave_type_id}`)
+      );
+
+      // Prepare bulk create data and track personnel who will receive credits
+      const bulkCreateData = [];
+      let initializedCount = 0;
+      const personnelToReceiveCredits = [];
+      const personnelWithExistingCredits = [];
+
+      for (const personnel of allPersonnel) {
+        let willReceiveCredits = false;
+        let existingCreditsCount = 0;
+        
+        for (const leaveType of allLeaveTypes) {
+          const balanceKey = `${personnel.id}-${leaveType.id}`;
+          
+          // Skip if balance already exists
+          if (existingBalanceSet.has(balanceKey)) {
+            existingCreditsCount++;
+            continue;
+          }
+
+          willReceiveCredits = true;
+
+          // Determine default credits based on leave type
+          let defaultCredits = 0;
+          if (leaveType.leave_type_name === 'Vacation Leave') defaultCredits = 15;
+          else if (leaveType.leave_type_name === 'Sick Leave') defaultCredits = 15;
+          else if (leaveType.leave_type_name === 'Maternity Leave') defaultCredits = 105;
+          else if (leaveType.leave_type_name === 'Paternity Leave') defaultCredits = 7;
+          else if (leaveType.leave_type_name === 'Personal Leave') defaultCredits = 3;
+          else defaultCredits = 0; // For other leave types
+
+          bulkCreateData.push({
+            personnel_id: personnel.id,
+            leave_type_id: leaveType.id,
+            year: currentYear,
+            total_credits: defaultCredits,
+            used_credits: 0,
+            earned_credits: 0,
+            last_updated: new Date()
+          });
+
+          initializedCount++;
+        }
+
+        // Track personnel status
+        if (willReceiveCredits) {
+          personnelToReceiveCredits.push({
+            id: personnel.id,
+            name: `${personnel.first_name} ${personnel.last_name}`,
+            department: personnel.department?.department_name || 'N/A'
+          });
+        } else if (existingCreditsCount > 0) {
+          personnelWithExistingCredits.push({
+            id: personnel.id,
+            name: `${personnel.first_name} ${personnel.last_name}`,
+            department: personnel.department?.department_name || 'N/A',
+            existingCreditsCount
+          });
+        }
+      }
+
+      // Perform bulk create if there are records to create
+      if (bulkCreateData.length > 0) {
+        await prisma.leaveBalance.createMany({
+          data: bulkCreateData,
+          skipDuplicates: true
+        });
+
+        console.log(`✅ Successfully initialized ${initializedCount} leave balance records for ${currentYear}`);
+      } else {
+        console.log(`ℹ️ No new leave balances to initialize for ${currentYear}`);
+      }
+
+      res.json({
+        success: true,
+        data: {
+          year: currentYear,
+          personnelCount: allPersonnel.length,
+          leaveTypeCount: allLeaveTypes.length,
+          initializedCount: initializedCount,
+          totalPossible: allPersonnel.length * allLeaveTypes.length,
+          personnelToReceiveCredits,
+          personnelWithExistingCredits,
+          leaveTypes: allLeaveTypes.map(lt => ({
+            id: lt.id,
+            name: lt.leave_type_name,
+            defaultCredits: lt.leave_type_name === 'Vacation Leave' ? 15 :
+                           lt.leave_type_name === 'Sick Leave' ? 15 :
+                           lt.leave_type_name === 'Maternity Leave' ? 105 :
+                           lt.leave_type_name === 'Paternity Leave' ? 7 :
+                           lt.leave_type_name === 'Personal Leave' ? 3 : 0
+          }))
+        },
+        message: `Bulk leave balance initialization completed. ${initializedCount} new balance records created for ${currentYear}.`
+      });
+    } catch (error: any) {
+      console.error('Error in bulk leave balance initialization:', error);
+      throw new CustomError('Failed to bulk initialize leave balances', 500);
+    }
+  }
+
+  // GET /api/leave/balance/bulk-initialize-preview - Preview bulk initialization without creating records
+  static async previewBulkInitializeLeaveBalances(req: Request, res: Response) {
+    try {
+      const { year } = req.query;
+      const currentYear = (year as string) || new Date().getFullYear().toString();
+
+      console.log(`Previewing bulk leave balance initialization for year: ${currentYear}`);
+
+      // Get all personnel
+      const allPersonnel = await prisma.personnel.findMany({
+        where: {
+          user: {
+            status: 'Active'
+          }
+        },
+        select: {
+          id: true,
+          first_name: true,
+          last_name: true,
+          department: {
+            select: {
+              department_name: true
+            }
+          }
+        },
+        orderBy: [
+          { last_name: 'asc' },
+          { first_name: 'asc' }
+        ]
+      });
+
+      // Get all leave types
+      const allLeaveTypes = await prisma.leaveType.findMany({
+        orderBy: { leave_type_name: 'asc' }
+      });
+
+      if (allPersonnel.length === 0) {
+        throw new CustomError('No active personnel found', 404);
+      }
+
+      if (allLeaveTypes.length === 0) {
+        throw new CustomError('No leave types found', 404);
+      }
+
+      // Get existing leave balances for the year
+      const existingBalances = await prisma.leaveBalance.findMany({
+        where: { year: currentYear },
+        select: {
+          personnel_id: true,
+          leave_type_id: true
+        }
+      });
+
+      // Create a set of existing balance combinations for quick lookup
+      const existingBalanceSet = new Set(
+        existingBalances.map(balance => `${balance.personnel_id}-${balance.leave_type_id}`)
+      );
+
+      // Track personnel who will receive credits and those with existing credits
+      let potentialInitializedCount = 0;
+      const personnelToReceiveCredits = [];
+      const personnelWithExistingCredits = [];
+
+      for (const personnel of allPersonnel) {
+        let willReceiveCredits = false;
+        let existingCreditsCount = 0;
+        
+        for (const leaveType of allLeaveTypes) {
+          const balanceKey = `${personnel.id}-${leaveType.id}`;
+          
+          // Skip if balance already exists
+          if (existingBalanceSet.has(balanceKey)) {
+            existingCreditsCount++;
+            continue;
+          }
+
+          willReceiveCredits = true;
+          potentialInitializedCount++;
+        }
+
+        // Track personnel status
+        if (willReceiveCredits) {
+          personnelToReceiveCredits.push({
+            id: personnel.id,
+            name: `${personnel.first_name} ${personnel.last_name}`,
+            department: personnel.department?.department_name || 'N/A'
+          });
+        } else if (existingCreditsCount > 0) {
+          personnelWithExistingCredits.push({
+            id: personnel.id,
+            name: `${personnel.first_name} ${personnel.last_name}`,
+            department: personnel.department?.department_name || 'N/A',
+            existingCreditsCount
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        data: {
+          year: currentYear,
+          personnelCount: allPersonnel.length,
+          leaveTypeCount: allLeaveTypes.length,
+          potentialInitializedCount: potentialInitializedCount,
+          totalPossible: allPersonnel.length * allLeaveTypes.length,
+          personnelToReceiveCredits,
+          personnelWithExistingCredits,
+          leaveTypes: allLeaveTypes.map(lt => ({
+            id: lt.id,
+            name: lt.leave_type_name,
+            defaultCredits: lt.leave_type_name === 'Vacation Leave' ? 15 :
+                           lt.leave_type_name === 'Sick Leave' ? 15 :
+                           lt.leave_type_name === 'Maternity Leave' ? 105 :
+                           lt.leave_type_name === 'Paternity Leave' ? 7 :
+                           lt.leave_type_name === 'Personal Leave' ? 3 : 0
+          }))
+        },
+        message: `Preview completed. ${potentialInitializedCount} leave balance records would be created for ${currentYear}.`
+      });
+    } catch (error: any) {
+      console.error('Error in preview bulk leave balance initialization:', error);
+      throw new CustomError('Failed to preview bulk initialize leave balances', 500);
+    }
+  }
+
   // ==================== LEAVE MONETIZATION ====================
 
   // GET /api/leave/monetization - Get leave monetization requests
@@ -941,7 +1226,13 @@ export class LeaveController {
   // GET /api/leave/reports/balance - Get leave balance report
   static async getLeaveBalanceReport(req: Request, res: Response) {
     try {
-      const { department_id, year = new Date().getFullYear().toString() } = req.query;
+      const { 
+        department_id, 
+        year = new Date().getFullYear().toString(),
+        page = 1,
+        limit = 10,
+        search
+      } = req.query;
 
       const where: any = { year: year as string };
       
@@ -951,43 +1242,68 @@ export class LeaveController {
         };
       }
 
-      const balances = await prisma.leaveBalance.findMany({
-        where,
-        include: {
-          personnel: {
-            select: {
-              id: true,
-              first_name: true,
-              last_name: true,
-              department: {
-                select: {
-                  id: true,
-                  department_name: true
+      // Add search functionality
+      if (search) {
+        where.personnel = {
+          ...where.personnel,
+          OR: [
+            { first_name: { contains: search as string, mode: 'insensitive' } },
+            { last_name: { contains: search as string, mode: 'insensitive' } }
+          ]
+        };
+      }
+
+      const skip = (Number(page) - 1) * Number(limit);
+      const take = Number(limit);
+
+      const [balances, total] = await Promise.all([
+        prisma.leaveBalance.findMany({
+          where,
+          include: {
+            personnel: {
+              select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+                department: {
+                  select: {
+                    id: true,
+                    department_name: true
+                  }
                 }
               }
-            }
+            },
+            leave_type: true
           },
-          leave_type: true
-        },
-        orderBy: [
-          {
-            personnel: {
-              department: {
-                department_name: 'asc'
+          skip,
+          take,
+          orderBy: [
+            {
+              personnel: {
+                department: {
+                  department_name: 'asc'
+                }
+              }
+            },
+            {
+              personnel: {
+                last_name: 'asc'
               }
             }
-          },
-          {
-            personnel: {
-              last_name: 'asc'
-            }
-          }
-        ]
-      });
+          ]
+        }),
+        prisma.leaveBalance.count({ where })
+      ]);
 
       res.json({
         success: true,
         data: balances,
+        pagination: {
+          page: Number(page),
+          limit: Number(limit),
+          total,
+          totalPages: Math.ceil(total / Number(limit))
+        },
         message: 'Leave balance report generated successfully'
       });
     } catch (error: any) {
